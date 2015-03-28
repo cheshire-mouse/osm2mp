@@ -73,7 +73,7 @@ use AreaTree;
 use Clipper;
 
 
-
+use Data::Dumper;
 
 print STDERR "\n  ---|   OSM -> MP converter  $VERSION   (c) 2008-2013 liosha, xliosha\@gmail.com\n";
 
@@ -658,6 +658,126 @@ if ( $flags->{routing} ) {
         print STDERR "$countmerg merged\n";
     }
 
+    ###     fixing close nodes (testing)
+
+    if ( $flags->{fix_close_nodes} ) {
+        print STDERR "Fixing close nodes...\n";
+        my %nd_replace;
+        my %nd_replace_rev;
+        my %rd_droped;
+        my %rd_fixed;
+        my $fix_count=1;
+        my $fix_count_short=0;
+        while ( $fix_count != $fix_count_short ) {
+            $fix_count=0;
+            $fix_count_short=0;
+            print STDERR "\tfind close nodes...\n";
+            while ( my ($roadid, $road) = each %road ) {
+                my $sz=scalar(keys $road->{chain});
+                my $i=$sz-1;
+                my $fix_count_line=0;
+                while ( --$i >= 0) {
+                    # indexes should swap the pair every cicle, 
+                    # or it will make a mess out of a long smooth turn
+                    my $i1=$i+$i%2;
+                    my $i2=$i+($i+1)%2;
+                    my $nd1=$road->{chain}->[$i1];
+                    my $nd2=$road->{chain}->[$i2];
+                    $road->{chain}->[$i1] = $nd_replace{$nd1} if exists $nd_replace{$nd1} ;
+                    $road->{chain}->[$i2] = $nd_replace{$nd2} if exists $nd_replace{$nd2} ;
+                    $nd1=$road->{chain}->[$i1];
+                    $nd2=$road->{chain}->[$i2];
+                    my $is_close=is_close_nodes($nd1,$nd2);
+                    if ($is_close && $nd1 ne $nd2 && ($sz - $fix_count_line) > 2 ) { #do not fix roads with 2 nodes left
+                        $nd_replace{$nd2}=$nd1;
+                        if ( not exists $nd_replace_rev{$nd1} ) {
+                            $nd_replace_rev{$nd1}=[$nd2];
+                        }
+                        else {
+                            push(@{$nd_replace_rev{$nd1}},$nd2);
+                        }
+                        if ( exists $nd_replace_rev{$nd2} ) {
+                            push(@{$nd_replace_rev{$nd1}},@{$nd_replace_rev{$nd2}});
+                            while (my ($key,$nd) = each $nd_replace_rev{$nd2}){
+                                $nd_replace{$nd}=$nd1;
+                            }
+                        } 
+                        $road->{chain}->[$i2]=$nd1;
+                        $rd_fixed{$roadid}=1;
+                        $fix_count_line++;
+                    }
+                }
+            }
+            print STDERR "\treplace close nodes and remove duplicates...\n";
+            while ( my ($roadid, $rd) = each %road ) {
+                my $count=scalar(keys $rd->{chain});
+                my $i=$count;
+                while ( --$i >= 0) {
+                    my $nd=$rd->{chain}->[$i];
+                    $rd->{chain}->[$i] = $nd_replace{$nd} if exists $nd_replace{$nd} ;
+                    if ( ( $i < $count - 1 ) && ( $rd->{chain}->[$i] eq $rd->{chain}->[$i+1] ) ) {
+                        splice($rd->{chain},$i,1);
+                        $fix_count++;
+                    }
+                }
+                $count=scalar(keys $rd->{chain});
+                if ( $count == 2 )  {
+                    my $nd1 = $rd->{chain}->[0];
+                    my $nd2 = $rd->{chain}->[1];
+                    if ( fix_close_nodes($nd1,$nd2) ) {
+                        $fix_count_short++;
+                        $fix_count++;
+#                        print STDERR "\tfix short $roadid\n";
+                    }
+                }
+                if ( $count < 2 )  {
+                    delete $road{$roadid};
+                    $rd_droped{$roadid}=1;
+                    print STDERR "\tdrop road $roadid\n";
+                }
+            }
+            print STDERR "\tfixed $fix_count\n";
+            print STDERR "\tfixed short $fix_count_short\n";
+        }
+        print STDERR "\tfix restrictions\n";
+        while (my ($key,$tr) = each %trest ){
+            if ( exists $nd_replace{$tr->{node}} ) {
+                print STDERR "\trestriction nodes replace $tr->{node} ->  $nd_replace{$tr->{node}}\n";
+                $tr->{node} = $nd_replace{$tr->{node}}; 
+            }
+            if ( exists $rd_droped{$tr->{fr_way}} ){
+                delete $trest{$key};
+                print STDERR "\tdrop restriction $key\n";
+                next;
+            }
+            elsif ( exists $rd_droped{$tr->{to_way}} ){
+                delete $trest{$key};
+                print STDERR "\tdrop restriction $key\n";
+                next;
+            }
+            foreach my $suf ("fr_","to_") {
+                my ($way,$pos) = ($suf."way",$suf."pos");
+                if ( exists $rd_fixed{$tr->{$way}} && $tr->{$pos} > 0 ){
+                    my $wid=$tr->{$way};
+                    my $nd=$tr->{node};
+                    my $p=$tr->{$pos};
+                    my $i=min($p,$#{$road{$wid}->{chain}})+1;
+#                    print STDERR "\t$way $wid $pos $p i $i";
+                    while( --$i >= 0 ){
+                        if ( $road{$wid}->{chain}->[$i] eq $nd ){
+                            $tr->{$pos} = $i;
+#                            print STDERR " new $i";
+                            last;
+                        }
+                    }
+#                    print STDERR "\n";
+                }
+            }
+        }
+        undef %nd_replace;
+        undef %nd_replace_rev;
+        undef %rd_fixed;
+    }
 
 
 
@@ -858,8 +978,6 @@ if ( $flags->{routing} ) {
         }
         print STDERR "$utcount restrictions added\n";
     }
-
-
 
 
 
@@ -1134,6 +1252,23 @@ sub name_from_list {
     return;
 }
 
+sub is_close_nodes {                # NodeID1, NodeID2
+    my ($id0, $id1) = @_;
+
+    my ($lon1, $lat1) = @{ $osm->get_lonlat($id0) };
+    my ($lon2, $lat2) = @{ $osm->get_lonlat($id1) };
+
+    my ($clat, $clon) = ( ($lat1+$lat2)/2, ($lon1+$lon2)/2 );
+    my ($dlat, $dlon) = ( ($lat2-$lat1),   ($lon2-$lon1)   );
+    my $klon = cos( $clat * 3.14159 / 180 );
+
+    my $ldist = $values->{fix_close_dist} * 180 / 20_000_000;
+
+    my $res = ($dlat**2 + ($dlon*$klon)**2) < $ldist**2;
+    return $res;
+}
+
+
 
 sub fix_close_nodes {                # NodeID1, NodeID2
     my ($id0, $id1) = @_;
@@ -1201,6 +1336,7 @@ sub write_turn_restriction {            # \%trest
     my ($tr) = @_;
 
     my $i = $tr->{fr_pos} - $tr->{fr_dir};
+#    print STDERR "frp $tr->{fr_pos} frd $tr->{fr_dir} i $i frw $tr->{fr_way}}\n";
     while ( !$nodid{ $road{$tr->{fr_way}}->{chain}->[$i] }  &&  $i >= 0  &&  $i < $#{$road{$tr->{fr_way}}->{chain}} ) {
         $i -= $tr->{fr_dir};
     }
@@ -2066,6 +2202,9 @@ sub _get_result_object_params {
                 $obj->{tag}->{ref},
                 @{ $road_ref{ $obj->{id} } || [] }
             );
+        for my $r (@refs) {
+            $r = name_from_list(ref => {ref => $r});
+        }
         $info{refs} = \@refs  if @refs;
     }
 

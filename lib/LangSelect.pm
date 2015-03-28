@@ -117,7 +117,7 @@ sub get_value {
     my $re = $self->{tag_re}->{$base_key} ||= do {
         my $k = quotemeta $base_key;
         my $div = length $k ? q{:} : q{};
-        qr/ ^ $k (?: $div (\w+) )? $ /xms
+        qr/ ^ $k (?: $div ([\w-]+) )? $ /xms
     };
 
     my %val = map { m/$re/xms ? (($1 || q{}) => $tags->{$_}) : () } keys %$tags;
