@@ -72,10 +72,23 @@ sub _api_request {
 
 sub _get_langs {
     my $api_response = _api_request( getLangs => ( ui => 'en' ) );
-    my $dirs = $api_response->{dirs};
-    croak "Bad api response"  if ref $dirs ne 'ARRAY';
+    # "dirs" is deprecated
+    #my $dirs = $api_response->{dirs};
+    my $resp = $api_response->{langs};
+    #croak "Bad api response"  if ref $resp ne 'ARRAY';
+    croak "Bad api response"  if ref $resp ne 'HASH';
+    my ($lang_from, $lang_to, @langs);
+    foreach $lang_from (keys $api_response->{langs}) {
+        foreach $lang_to (keys $api_response->{langs}) {
+            if ($lang_to ne $lang_from) {
+                my @lang_pair = ($lang_from,$lang_to);
+                push(@langs,\@lang_pair);
+            }
+        }
+    }
 
-    return map {[ split /-/x ]} @$dirs;
+    #return map {[ split /-/x ]} @$dirs;
+    return @langs;
 }
 
 
