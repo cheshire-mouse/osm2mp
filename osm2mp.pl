@@ -675,7 +675,7 @@ if ( $flags->{routing} ) {
             $fix_count_short=0;
             print STDERR "\tfind close nodes...\n";
             while ( my ($roadid, $road) = each %road ) {
-                my $sz=scalar(keys $road->{chain});
+                my $sz=scalar(keys @{$road->{chain}});
                 my $i=$sz-1;
                 my $fix_count_line=0;
                 while ( --$i >= 0) {
@@ -700,7 +700,7 @@ if ( $flags->{routing} ) {
                         }
                         if ( exists $nd_replace_rev{$nd2} ) {
                             push(@{$nd_replace_rev{$nd1}},@{$nd_replace_rev{$nd2}});
-                            while (my ($key,$nd) = each $nd_replace_rev{$nd2}){
+                            while (my ($key,$nd) = each @{$nd_replace_rev{$nd2}}){
                                 $nd_replace{$nd}=$nd1;
                             }
                         } 
@@ -712,17 +712,17 @@ if ( $flags->{routing} ) {
             }
             print STDERR "\treplace close nodes and remove duplicates...\n";
             while ( my ($roadid, $rd) = each %road ) {
-                my $count=scalar(keys $rd->{chain});
+                my $count=scalar(keys @{$rd->{chain}});
                 my $i=$count;
                 while ( --$i >= 0) {
                     my $nd=$rd->{chain}->[$i];
                     $rd->{chain}->[$i] = $nd_replace{$nd} if exists $nd_replace{$nd} ;
                     if ( ( $i < $count - 1 ) && ( $rd->{chain}->[$i] eq $rd->{chain}->[$i+1] ) ) {
-                        splice($rd->{chain},$i,1);
+                        splice(@{$rd->{chain}},$i,1);
                         $fix_count++;
                     }
                 }
-                $count=scalar(keys $rd->{chain});
+                $count=scalar(keys @{$rd->{chain}});
                 if ( $count == 2 )  {
                     my $nd1 = $rd->{chain}->[0];
                     my $nd2 = $rd->{chain}->[1];

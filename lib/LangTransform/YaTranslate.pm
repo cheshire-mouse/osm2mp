@@ -78,8 +78,8 @@ sub _get_langs {
     #croak "Bad api response"  if ref $resp ne 'ARRAY';
     croak "Bad api response"  if ref $resp ne 'HASH';
     my ($lang_from, $lang_to, @langs);
-    foreach $lang_from (keys $api_response->{langs}) {
-        foreach $lang_to (keys $api_response->{langs}) {
+    foreach $lang_from (keys %{$api_response->{langs}}) {
+        foreach $lang_to (keys %{$api_response->{langs}}) {
             if ($lang_to ne $lang_from) {
                 my @lang_pair = ($lang_from,$lang_to);
                 push(@langs,\@lang_pair);
