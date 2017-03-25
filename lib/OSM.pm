@@ -56,7 +56,7 @@ sub AUTOLOAD {
     my $self = shift;
     my ($method) = our $AUTOLOAD =~ / (?:^|::) ([^:]+) $ /xms;
     my $storage = $self->{storage};
-    return $storage->$method(@_);
+    return $storage->$method(@_) if $storage;
 }
 
 
