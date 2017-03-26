@@ -791,7 +791,7 @@ sub UNTIE {
 
 sub DESTROY {
     my $self = shift;
-    $self->dbh->commit; #'hard' commit
+    $self->dbh->commit if $self->dbh; #'hard' commit
     my $tbl = $STMT{$self->ref};
     # finish and destroy stmt handles
     for ( keys %$tbl ) {
@@ -799,9 +799,11 @@ sub DESTROY {
     undef $self->{$_."_sth"};
     }
     # disconnect
-    croak($self->dbh->errstr) unless $self->dbh->disconnect;
-    $self->{dbh}->DESTROY;
-    undef $self->{dbh};
+    if ($self->dbh) {
+        croak($self->dbh->errstr) unless $self->dbh->disconnect;
+        $self->{dbh}->DESTROY;
+        undef $self->{dbh};
+    }
     # remove file if nec
     $self->_fh->close() if $self->_fh;
     if (-e $self->file) {
