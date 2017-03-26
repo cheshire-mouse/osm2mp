@@ -29,6 +29,10 @@ sub new {
     return bless $self, $class;
 }
 
+sub DESTROY {
+    my $self=shift;
+    undef $self;
+}
 
 sub add_polygon {
     my ($self, $mpid, $mpoly, $tags) = @_;
