@@ -113,6 +113,9 @@ sub generate_polygons {
 
             for my $key ( keys %$coast ) {
                 my $line = $coast->{$key};
+
+                # skip polygons, they bring only troubles
+                next if _is_point_eq($line->[0],$line->[-1]);
                 
                 # check start of coastline
                 my $p1     = $line->[0];
