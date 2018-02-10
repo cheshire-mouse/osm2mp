@@ -491,10 +491,24 @@ if ( $flags->{transport_stops} ) {
     printf STDERR "  %d transport stops\n", scalar keys %trstop;
 }
 
-
+# copy subway entrance name from subway station
+if ( $flags->{subway_entrance_name} ) {
+    my $copy_subway_entrance_name_sub = sub {
+        my ($relation_id, $members, $tags) = @_;
+        return if !exists($tags->{name});
+        for my $member ( @$members ) {
+            my ($type, $ref, $role) = @$member{ qw/ type ref role / };
+            my $tag_ref = $osm->get_tags($type => $ref);
+            next if !$tag_ref;
+            if ( exists($tag_ref->{railway}) and ($tag_ref->{railway} eq "subway_entrance") ){
+                $tag_ref->{name} = $tags->{name};
+            }
+        }
+    };
+    $osm->iterate_relations(public_transport => $copy_subway_entrance_name_sub);
+}
 
 my $coast = Coastlines->new( $bound ? $bound->get_points() : [] );
-
 
 
 ##  Process POI nodes
