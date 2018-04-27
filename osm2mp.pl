@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/local/bin/perl
 
 ##
 ##  osm2mp.pl - OpenStreetMap to 'polish' format converter
@@ -733,6 +733,7 @@ if ( $flags->{routing} ) {
                     $rd->{chain}->[$i] = $nd_replace{$nd} if exists $nd_replace{$nd} ;
                     if ( ( $i < $count - 1 ) && ( $rd->{chain}->[$i] eq $rd->{chain}->[$i+1] ) ) {
                         splice(@{$rd->{chain}},$i,1);
+                        $rd_fixed{$roadid}=1;
                         $fix_count++;
                     }
                 }
